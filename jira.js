@@ -99,7 +99,7 @@ function calc_progress(issues) {
 	    // console.log('total estimated : ' + total_estimated);
 	    // console.log('total time spent: ' + total_time_spent);
 	    // console.log(fields.worklog.worklogs);
-	    drawChart(total_estimated/(60*60));
+	    //drawChart(db.effort_aggrigated.estimated/(60*60));
 	    populate_data(obj);
 	});
     }
@@ -200,7 +200,9 @@ sprintSupportEnabled: true
 google.load('visualization', '1', {packages: ['corechart']});
 google.setOnLoadCallback(get_issues_for_current_sprint);
 
-function drawChart(total_estimated_effort) {
+function drawChart() {
+
+    var total_estimated_effort = db.effort_aggrigated.estimated/(60*60);
 
     var data = new google.visualization.DataTable();
     data.addColumn('number', 'X');
