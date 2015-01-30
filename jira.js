@@ -12,10 +12,16 @@ var db = {
 	actual: null
     },
 
+    effort_aggrigated: {
+        estimated: 0,
+        remaining: 0,
+        actual: 0
+    },
+
     days_remaining_effort: {},
     days_estimated_effort: [],
-    days_actual_effort: []
-
+    days_actual_effort: [],
+    rows: []
 };
 
 /**
@@ -51,26 +57,25 @@ function get_issues_for_current_sprint(){
   goog.net.XhrIo.send(url, function(e) {
       var xhr = e.target;
       var obj = xhr.getResponseJson();
-      console.log(obj);
 
-      // TODO: find another way instead of using index [1].
-      db.sprint.start = obj.sprintsData.sprints[1].startDate;
-      db.sprint.end = obj.sprintsData.sprints[1].endDate;
+      // TODO: find another way instead of using index [0].
+      db.sprint.start = obj.sprintsData.sprints[0].startDate;
+      db.sprint.end = obj.sprintsData.sprints[0].endDate;
 
-      // console.log(obj['issuesData']['issues']);
 
       var issues = obj['issuesData']['issues'];
+      db.issues = issues;
       var len = issues.length;
-      tasks = [];
-      for(var i=0; i<len; i++){
-      	  var issue = issues[i];
-      	  if(issue.typeName = 'sub-task')
-      	      tasks.push(issue);
-      	  // console.log(issue.typeName);
-      	  // console.log(issue.summary);
-      }
-      calc_progress(tasks);
-
+      // tasks = [];
+      // for(var i=0; i<len; i++){
+      // 	  var issue = issues[i];
+      // 	  if(issue.typeName = 'sub-task')
+      // 	      tasks.push(issue);
+      // 	  // console.log(issue.typeName);
+      // 	  // console.log(issue.summary);
+      // }
+      // //calc_progress(tasks);
+      calc_progress(issues);
   });
 }
 
@@ -85,11 +90,10 @@ function calc_progress(issues) {
 	goog.net.XhrIo.send(url, function(e) {
 	    var xhr = e.target;
 	    var obj = xhr.getResponseJson();
-	    // console.log(obj);
 	    var fields = obj.fields;
-	    total_estimated += fields.aggregatetimeestimate; //in seconds
-	    fields.aggregatetimeoriginalestimate;
-	    total_time_spent += fields.aggregatetimespent;
+	    db.effort_aggrigated.remaining += fields.aggregatetimeestimate; //in seconds
+	    db.effort_aggrigated.estimated += fields.aggregatetimeoriginalestimate;
+	    db.effort_aggrigated.actual += fields.aggregatetimespent;
 
 	    var progress = fields.aggregateprogress;
 	    // console.log(progress.percent);
@@ -230,29 +234,30 @@ function drawChart(total_estimated_effort) {
         rows.push([day, null, est]);
     }
 
-    console.log("Rows:");
     // Calculate initial effort
     for(var k in db.days_remaining_effort){
-	var issue = db.days_remaining_effort[k];
-	console.log(issue);
-	for(var day in issue){
-	    if(day <= 0){
-		rows[0][1] == null? rows[0][1] = issue[day] : rows[0][1] += issue[day];
-	    }
-	    else rows[day][1] == null? rows[day][1] = issue[day] : rows[day][1] += issue[day];
-	}
+        var issue = db.days_remaining_effort[k];
+        for(var day in issue){
+            var e = issue[day];
+            if(day <= 0){
+                foo += issue[day];
+                rows[0][1] == null? rows[0][1] = issue[day] : rows[0][1] += issue[day];
+            }
+            else{
+                rows[day][1] == null? rows[day][1] = issue[day] : rows[day][1] += issue[day];
+            }
+        }
     }
-
+    db.rows = rows;
     // Convert to hours
     for(var i=0; i<= days; i++){
         rows[i][1] = rows[i][1]/(60*60);
     }
 
-    console.log("Rows:");
-    console.log(rows);
     // rows[0][1] = estimate;
     // rows[1][1] = 30;
     data.addRows(rows);
+
 
 
     var options = {
