@@ -30,12 +30,9 @@ var db = {
  * @param {string} dataUrl The url to request.
  */
 function getData(dataUrl, username, password) {
-  console.log('Sending simple request for ['+ dataUrl + ']');
-
   goog.net.XhrIo.send(dataUrl, function(e) {
       var xhr = e.target;
       var obj = xhr.getResponseJson();
-      console.log(obj);
   }, null, null, make_auth_header(username, password));
 }
 
@@ -155,9 +152,6 @@ function populate_data(issue){
 	//     db.days_remaining_effort[issue.key][day] = 0;
 	// }
     }
-
-    console.log('data:');
-    console.log(db);
 
     // When the issue is done, set remaining work to '0'.
     //obj.fields.status.name == "NIC DEV - DONE";
