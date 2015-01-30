@@ -1,6 +1,6 @@
 goog.require('goog.net.XhrIo');
 
-var data = {
+var db = {
     sprint: {
 	start: null,
 	end: null
@@ -10,7 +10,12 @@ var data = {
 	estimated: null,
 	remaining: null,
 	actual: null
-    }
+    },
+
+    days_remaining_effort: {},
+    days_estimated_effort: [],
+    days_actual_effort: []
+
 };
 
 /**
@@ -47,11 +52,12 @@ function get_issues_for_current_sprint(){
       var xhr = e.target;
       var obj = xhr.getResponseJson();
       console.log(obj);
-      //"23/Dec/14 2:23 PM"
-      var sprint_start = obj.sprintsData.sprints[1].startDate;
-      var sprint_end = obj.sprintsData.sprints[1].endDate;
 
-      console.log(obj['issuesData']['issues']);
+      // TODO: find another way instead of using index [1].
+      db.sprint.start = obj.sprintsData.sprints[1].startDate;
+      db.sprint.end = obj.sprintsData.sprints[1].endDate;
+
+      // console.log(obj['issuesData']['issues']);
 
       var issues = obj['issuesData']['issues'];
       var len = issues.length;
@@ -63,12 +69,12 @@ function get_issues_for_current_sprint(){
       	  // console.log(issue.typeName);
       	  // console.log(issue.summary);
       }
-      calc_progress(tasks, sprint_start, sprint_end);
+      calc_progress(tasks);
 
   });
 }
 
-function calc_progress(issues, sprint_start, sprint_end) {
+function calc_progress(issues) {
     var issue = 'https://nicusa.atlassian.net/rest/api/2/issue/';
     var total_estimated = 0;
     var total_time_spent = 0;
@@ -79,7 +85,7 @@ function calc_progress(issues, sprint_start, sprint_end) {
 	goog.net.XhrIo.send(url, function(e) {
 	    var xhr = e.target;
 	    var obj = xhr.getResponseJson();
-	    console.log(obj);
+	    // console.log(obj);
 	    var fields = obj.fields;
 	    total_estimated += fields.aggregatetimeestimate; //in seconds
 	    fields.aggregatetimeoriginalestimate;
@@ -89,12 +95,69 @@ function calc_progress(issues, sprint_start, sprint_end) {
 	    // console.log(progress.percent);
 	    // console.log(progress.progress);
 	    // console.log(progress.total);
-	    console.log('total estimated : ' + total_estimated);
-	    console.log('total time spent: ' + total_time_spent);
-	    console.log(fields.worklog.worklogs);
-	    drawChart(total_estimated/(60*60), sprint_start, sprint_end);
+	    // console.log('total estimated : ' + total_estimated);
+	    // console.log('total time spent: ' + total_time_spent);
+	    // console.log(fields.worklog.worklogs);
+	    drawChart(total_estimated/(60*60));
+	    populate_data(obj);
 	});
     }
+}
+
+function populate_data(issue){
+    db.days_remaining_effort[issue.key] = {};
+
+    histories = issue.changelog.histories;
+    var sprint_start = new Date(Date.parse(db.sprint.start));
+
+    for(var i=0; i<histories.length; i++) {
+	var history = histories[i];
+	var date = new Date(Date.parse(history.created));
+	var items = history.items;
+
+	var day = Math.round((date - sprint_start)/(1000*60*60*24));
+	//if(day < 0) continue; // ignore previous work.
+	
+	var remaining_effort = 0;
+	var estimated_effort = 0;
+	var actual_effort = 0;
+
+	for(var j=0; j<items.length; j++){
+	    var item = items[j];
+
+	    if(item.field == "timeoriginalestimate"){
+		//var original_estimate = item.to; // string in seconds.. needs to be parsed to int.
+		estimated_effort += parseInt(item.to);
+	    }
+	    if(item.field == "timeestimate"){ // Remaining effort.
+		db.days_remaining_effort[issue.key][day] = parseInt(item.to);
+
+		//remaining_effort += parseInt(item.to);
+	
+	    }
+	    if(item.field == "timespent"){
+		actual_effort += parseInt(item.to);
+	    }
+	}
+
+	//if(db.days_remaining_effort[day] == undefined)  db.days_remaining_effort[day] = 0;
+	if(db.days_estimated_effort[day] == undefined)  db.days_estimated_effort[day] = 0;
+	if(db.days_actual_effort[day] == undefined)  db.days_actual_effort[day] = 0;
+
+	db.days_estimated_effort[day] += estimated_effort;
+	db.days_actual_effort[day] += actual_effort;
+	
+	// if(issue.fields.status.name != "NIC DEV - DONE"){
+	//     db.days_remaining_effort[issue.key][day] = 0;
+	// }
+    }
+
+    console.log('data:');
+    console.log(db);
+
+    // When the issue is done, set remaining work to '0'.
+    //obj.fields.status.name == "NIC DEV - DONE";
+
 }
 
 /*
@@ -139,17 +202,17 @@ sprintSupportEnabled: true
 google.load('visualization', '1', {packages: ['corechart']});
 google.setOnLoadCallback(get_issues_for_current_sprint);
 
-function drawChart(total_estimated_effort, sprint_start, sprint_end) {
+function drawChart(total_estimated_effort) {
 
     var data = new google.visualization.DataTable();
     data.addColumn('number', 'X');
-    data.addColumn('number', 'Estimated');
     data.addColumn('number', 'Remaining');
+    data.addColumn('number', 'Estimated');
 //    data.addColumn('number', 'Actual');
 
-    var start = new Date(Date.parse(sprint_start));
-    var end = new Date(Date.parse(sprint_end));
-    console.log((end - start)/(1000*60*60*24));
+    var start = new Date(Date.parse(db.sprint.start));
+    var end = new Date(Date.parse(db.sprint.end));
+    //console.log((end - start)/(1000*60*60*24));
     var daysOfYear = [];
     for (var d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
 	daysOfYear.push(new Date(d));
@@ -167,9 +230,28 @@ function drawChart(total_estimated_effort, sprint_start, sprint_end) {
         rows.push([day, null, est]);
     }
 
+    console.log("Rows:");
+    // Calculate initial effort
+    for(var k in db.days_remaining_effort){
+	var issue = db.days_remaining_effort[k];
+	console.log(issue);
+	for(var day in issue){
+	    if(day <= 0){
+		rows[0][1] == null? rows[0][1] = issue[day] : rows[0][1] += issue[day];
+	    }
+	    else rows[day][1] == null? rows[day][1] = issue[day] : rows[day][1] += issue[day];
+	}
+    }
 
-    rows[0][1] = estimate;
-    rows[1][1] = 30;
+    // Convert to hours
+    for(var i=0; i<= days; i++){
+        rows[i][1] = rows[i][1]/(60*60);
+    }
+
+    console.log("Rows:");
+    console.log(rows);
+    // rows[0][1] = estimate;
+    // rows[1][1] = 30;
     data.addRows(rows);
 
 
@@ -185,7 +267,6 @@ function drawChart(total_estimated_effort, sprint_start, sprint_end) {
         },
 	legend: { position: 'bottom' },
 
-          curveType: 'function',
     };
 
     var chart = new google.visualization.LineChart(document.getElementById('ex2'));
