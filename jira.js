@@ -236,7 +236,6 @@ function drawChart() {
         for(var day in issue){
             var e = issue[day];
             if(day <= 0){
-                foo += issue[day];
                 rows[0][1] == null? rows[0][1] = issue[day] : rows[0][1] += issue[day];
             }
             else{
